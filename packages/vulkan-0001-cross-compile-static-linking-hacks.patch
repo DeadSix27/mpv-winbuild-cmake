@@ -13,7 +13,7 @@ Subject: [PATCH] loader: cross-compile & static linking hacks
  6 files changed, 18 insertions(+), 14 deletions(-)
 
 diff --git a/loader/CMakeLists.txt b/loader/CMakeLists.txt
-index 9c8173f..d103beb 100644
+index 9c8173fa..d103beb2 100644
 --- a/loader/CMakeLists.txt
 +++ b/loader/CMakeLists.txt
 @@ -23,7 +23,7 @@ endif()
@@ -37,7 +37,7 @@ index 9c8173f..d103beb 100644
 @@ -137,7 +137,7 @@ add_custom_target(loader_gen_files DEPENDS
          vk_loader_extensions.c
      )
- 
+
 -if (WIN32)
 +if (WIN32 AND MSVC)
      # Use static MSVCRT libraries
@@ -46,13 +46,13 @@ index 9c8173f..d103beb 100644
 @@ -188,9 +188,8 @@ if (WIN32)
  else()
      set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wpointer-arith")
- 
+
 -    add_library(${API_LOWERCASE} SHARED ${NORMAL_LOADER_SRCS} ${OPT_LOADER_SRCS})
 +    add_library(${API_LOWERCASE} STATIC ${NORMAL_LOADER_SRCS} ${OPT_LOADER_SRCS})
      add_dependencies(${API_LOWERCASE} generate_helper_files loader_gen_files loader_asm_gen_files)
 -    set_target_properties(${API_LOWERCASE} PROPERTIES SOVERSION "1" VERSION "1.0.${vk_header_version}")
      target_link_libraries(${API_LOWERCASE} -ldl -lpthread -lm)
- 
+
      if(INSTALL_LVL_FILES)
 @@ -201,9 +200,7 @@ else()
      include(FindPkgConfig QUIET)
@@ -66,12 +66,12 @@ index 9c8173f..d103beb 100644
          if(INSTALL_LVL_FILES)
              install(FILES       "${CMAKE_CURRENT_BINARY_DIR}/vulkan.pc"
 diff --git a/loader/loader.c b/loader/loader.c
-index 912d81c..6d36af5 100644
+index 2e756377..6283b067 100644
 --- a/loader/loader.c
 +++ b/loader/loader.c
 @@ -48,9 +48,9 @@
  #include "murmurhash.h"
- 
+
  #if defined(_WIN32)
 -#include <Cfgmgr32.h>
 +#include <cfgmgr32.h>
@@ -79,62 +79,62 @@ index 912d81c..6d36af5 100644
 -#include <Devpkey.h>
 +#include <devpkey.h>
  #endif
- 
+
  // This is a CMake generated file with #defines for any functions/includes
 @@ -514,7 +514,7 @@ bool loaderGetDeviceRegistryEntry(const struct loader_instance *inst, char **reg
          } else {
              (void)snprintf(*reg_data + strlen(*reg_data), requiredSize + 2, "%c%s", PATH_SEPARATOR, curr_filename);
          }
--        loader_log(inst, VK_DEBUG_REPORT_INFORMATION_BIT_EXT, 0, __FUNCTION__ ": Located json file \"%s\" from PnP registry: %s", curr_filename, value_name);
-+        // loader_log(inst, VK_DEBUG_REPORT_INFORMATION_BIT_EXT, 0, __FUNCTION__ ": Located json file \"%s\" from PnP registry: %s", curr_filename, value_name);
- 
+-        loader_log(inst, VK_DEBUG_REPORT_INFORMATION_BIT_EXT, 0, "%s: Located json file \"%s\" from PnP registry: %s", __FUNCTION__, curr_filename, value_name);
++        // loader_log(inst, VK_DEBUG_REPORT_INFORMATION_BIT_EXT, 0, "%s: Located json file \"%s\" from PnP registry: %s", __FUNCTION__, curr_filename, value_name);
+
          if (data_type == REG_SZ) {
              break;
 diff --git a/loader/loader.h b/loader/loader.h
-index 43600f9..c202b30 100644
+index 43600f93..c202b302 100644
 --- a/loader/loader.h
 +++ b/loader/loader.h
 @@ -44,6 +44,9 @@
  #define LOADER_EXPORT
  #endif
- 
+
 +#define CM_GETIDLIST_FILTER_CLASS ( 0x00000200 )
 +#define CM_GETIDLIST_FILTER_PRESENT ( 0x00000100 )
 +
  // A debug option to disable allocators at compile time to investigate future issues.
  #define DEBUG_DISABLE_APP_ALLOCATORS 0
- 
+
 diff --git a/loader/loader.rc b/loader/loader.rc
-index 177de20..1c865bf 100755
+index 177de20b..1c865bf5 100755
 --- a/loader/loader.rc
 +++ b/loader/loader.rc
 @@ -43,7 +43,11 @@
  ///////////////////////////////////////////////////////////////////////////////
  ///////////////////////////////////////////////////////////////////////////////
- 
+
 +#ifdef __MINGW64__
 +#include <winresrc.h>
 +#else // MSVC
  #include "winres.h"
 +#endif
- 
+
  #define VER_FILE_VERSION            VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, VERSION_BUILDNO
- 
+
 diff --git a/loader/vk_loader_platform.h b/loader/vk_loader_platform.h
-index 207e5a4..a6f4015 100644
+index c04d0371..8a9ed20b 100644
 --- a/loader/vk_loader_platform.h
 +++ b/loader/vk_loader_platform.h
 @@ -24,7 +24,7 @@
- 
+
  #if defined(_WIN32)
  // WinSock2.h must be included *BEFORE* windows.h
 -#include <WinSock2.h>
 +#include <winsock2.h>
  #endif  // _WIN32
- 
+
  #include "vulkan/vk_platform.h"
 diff --git a/loader/vulkan.pc.in b/loader/vulkan.pc.in
-index 2ce5aea..6e89703 100644
+index 2ce5aea4..6e897033 100644
 --- a/loader/vulkan.pc.in
 +++ b/loader/vulkan.pc.in
 @@ -1,6 +1,6 @@
@@ -144,8 +144,8 @@ index 2ce5aea..6e89703 100644
 +exec_prefix=${prefix}
 +libdir=${exec_prefix}/lib
  includedir=${prefix}/include
- 
+
  Name: @CMAKE_PROJECT_NAME@
--- 
-2.14.1
+--
+2.15.1
 
